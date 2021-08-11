@@ -17,6 +17,7 @@ from ..models.warpedgpmodel import WarpedGPModel
 from ..models.input_warped_gpmodel import InputWarpedGPModel
 from ..optimization.acquisition_optimizer import AcquisitionOptimizer
 import GPyOpt
+import time
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -101,15 +102,19 @@ class BayesianOptimization(BO):
             self.objective_name = 'no_name'
         self.batch_size = batch_size
         self.num_cores = num_cores
+
         if f is not None:
             self.f = self._sign(f)
-            self.objective = SingleObjective(self.f, self.batch_size,self.objective_name)
+            self.objective = SingleObjective(self.f, self.num_cores, self.objective_name)
         else:
             self.f = None
             self.objective = None
 
         # --- CHOOSE the cost model
         self.cost = CostModel(cost_withGradients)
+
+        self.cost_eval = []
+        self.cost_decision = []
 
         # --- CHOOSE initial design
         self.X = X
@@ -191,11 +196,19 @@ class BayesianOptimization(BO):
 
         # Case 1:
         if self.X is None:
+
+            t0 = time.time()
             self.X = initial_design(self.initial_design_type, self.space, self.initial_design_numdata)
-            self.Y, _ = self.objective.evaluate(self.X)
+            t1 = time.time()
+            n = self.initial_design_numdata // self.batch_size
+            for _ in range(n):
+                self.cost_decision.append((t1 - t0) / n)
+            self.Y, cost = self.objective.evaluate(self.X)
+            self.cost_eval.append(cost)
         # Case 2
         elif self.X is not None and self.Y is None:
-            self.Y, _ = self.objective.evaluate(self.X)
+            self.Y, cost = self.objective.evaluate(self.X)
+            self.cost_eval.append(cost)
 
     def _sign(self,f):
          if self.maximize:

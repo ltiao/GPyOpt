@@ -130,13 +130,16 @@ class BO(object):
 
         # --- Initialize iterations and running time
         self.time_zero = time.time()
-        self.cum_time  = 0
+        self.cum_time = 0
         self.num_acquisitions = 0
         self.suggested_sample = self.X
         self.Y_new = self.Y
 
         # --- Initialize time cost of the evaluations
         while (self.max_time > self.cum_time):
+
+            t0 = time.time()
+
             # --- Update model
             try:
                 self._update_model(self.normalization_type)
@@ -149,8 +152,13 @@ class BO(object):
 
             self.suggested_sample = self._compute_next_evaluations()
 
+            t1 = time.time()
+
+            decision_duration = t1 - t0
+            self.cost_decision.append(decision_duration)
+
             # --- Augment X
-            self.X = np.vstack((self.X,self.suggested_sample))
+            self.X = np.vstack((self.X, self.suggested_sample))
 
             # --- Evaluate *f* in X, augment Y and update cost function (if needed)
             self.evaluate_objective()
@@ -160,8 +168,9 @@ class BO(object):
             self.num_acquisitions += 1
 
             if verbosity:
-                print("num acquisition: {}, time elapsed: {:.2f}s".format(
-                    self.num_acquisitions, self.cum_time))
+                print(f"iteration: {self.num_acquisitions:03d}, "
+                      f"time elapsed: {self.cum_time:.2f}s, "
+                      f"decision time: {t1-t0:.2f}s")
 
         # --- Stop messages and execution time
         self._compute_results()
@@ -194,12 +203,12 @@ class BO(object):
                 print('** GPyOpt Bayesian Optimization class initialized successfully **')
                 self.initial_iter = False
 
-
     def evaluate_objective(self):
         """
         Evaluates the objective
         """
         self.Y_new, cost_new = self.objective.evaluate(self.suggested_sample)
+        self.cost_eval.append(cost_new)
         self.cost.update_cost_model(self.suggested_sample, cost_new)
         self.Y = np.vstack((self.Y,self.Y_new))
 
